@@ -12,4 +12,4 @@ simulation_and_recovery_code/
 analysis_code/explo_recoverability.Rmd
 
 # Ignore simulated data (too large)
-data/model_output/*sim*.csv
+data/model_output/
