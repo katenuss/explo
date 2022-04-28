@@ -1,0 +1,1271 @@
+---
+title: "Explore Exploit Analyses"
+date: "4/28/22"
+output: 
+    html_document:
+        df_print: 'paged'
+        toc: true
+        toc_float:
+            collapsed: false
+            smooth_scroll: true
+        number_sections: false
+        code_download: true
+        self_contained: true
+---
+
+```{r dir, include=FALSE}
+# Settings
+root <- rprojroot::find_rstudio_root_file()
+dataDir <- file.path(root, 'data')
+codeDir <- file.path(root, 'analysis_code')
+figDir <- file.path(root, 'figures')
+
+#default options for code chunks
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FALSE)
+knitr::opts_chunk$set(dpi=600)
+```
+
+```{r libraries}
+library(afex)
+library(tidyverse)
+library(sjPlot)
+#library(GGally)
+library(knitr)
+library(kableExtra)
+library(pander)
+library(zoo)
+```
+
+```{r define functions}
+#scale function (z score)
+scale_this <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+
+#standard error
+se <- function(x, ...) sqrt(var(x, ..., na.rm=T)/length(x))
+```
+
+```{r plot colors and theme}
+## Define colors
+color1 = "#fe4a49"
+color2 = "#2ab7ca"
+color3 = "#fed766"
+color4 = "#e6e6ea"
+color5 = "#f4f4f8"
+
+## Explo plotting theme
+explo.theme <- theme(panel.background = element_rect(fill='transparent'),
+                    axis.line = element_line(color='black'),
+                    panel.grid.minor = element_line(color='transparent'),
+                    axis.title.x = element_text(size=16, vjust=-.25),
+                    axis.title.y = element_text(size=16, vjust=1),
+                    axis.text.x = element_text(size=12, colour="black"),
+                    axis.text.y = element_text(size=12, colour="black"),
+                    legend.text=element_text(size=12),
+                    legend.title = element_text(size = 14),
+                    plot.title = element_text(size=16, face = "bold", hjust = .5), 
+                    strip.text.x = element_text(size=12), 
+                    strip.text.y = element_text(size=12, face="bold"), 
+                    strip.background = element_rect(colour= "black", fill = "transparent"))
+```
+
+```{r import data}
+## Import data
+exploData <- read_csv(file.path(dataDir, "explo_choice_data.csv"))
+demographicData <- read_csv(file.path(dataDir, "explo_demographics.csv"))
+```
+
+```{r merge data}
+## merge choice data with demographics
+exploAll <- inner_join(exploData, demographicData, by = c("subID"))
+```
+
+```{r create age group variables}
+# Note: 
+# ageGroup3 = children, adolescents, adults
+# ageGroup4 = children, adolescents, young adults, adults
+
+#create age group variable in each data frame
+demographicData <- demographicData %>% 
+   mutate(ageGroup4 = case_when(age < 13 ~ "Children",
+                                       age > 12 & age < 18 ~ "Adolescents",
+                                       age > 18 & age < 23 ~ "Young Adults",
+                                       age > 23 ~ "Adults"),
+          ageGroup3 = case_when(age < 13 ~ "Children",
+                                       age > 12 & age < 18 ~ "Adolescents",
+                                       age > 18 ~"Adults"))
+
+exploAll <- exploAll %>% 
+    mutate(ageGroup4 = case_when(age < 13 ~ "Children",
+                                       age > 12 & age < 18 ~ "Adolescents",
+                                       age > 18 & age < 23 ~ "Young Adults",
+                                       age > 23 ~ "Adults"),
+           ageGroup3 = case_when(age < 13 ~ "Children",
+                                       age > 12 & age < 18 ~ "Adolescents",
+                                       age > 18 ~"Adults"))
+
+#reorder levels of age group factors
+exploAll$ageGroup3 <- factor(exploAll$ageGroup3, levels = c("Children", "Adolescents", "Adults"))
+demographicData$ageGroup3 <- factor(demographicData$ageGroup3, levels = c("Children", "Adolescents", "Adults"))
+
+exploAll$ageGroup4 <- factor(exploAll$ageGroup4, levels = c("Children", "Adolescents", "Young Adults", "Adults"))
+demographicData$ageGroup4 <- factor(demographicData$ageGroup4, levels = c("Children", "Adolescents", "Young Adults", "Adults"))
+```
+
+# Demographics
+## Age and sex distribution
+```{r plot age and sex distribution}
+ageSexPlot <- ggplot(demographicData, aes(x = trunc(age), fill=sex), color = "black") + 
+    geom_histogram(binwidth=1, color = "black") + 
+    theme(text=element_text(size=18)) +
+    scale_fill_manual(values=c(color1, color2, color3), labels = c("Female", "Male", "Non-binary"), name = "Sex") +
+    scale_x_continuous(breaks = seq(from=min(trunc(demographicData$age)), to=max(trunc(demographicData$age)), by=1)) +
+    scale_y_continuous(breaks = 0:6) +
+    xlab("Age") +
+    ylab("Number of Participants") +
+    explo.theme
+ageSexPlot
+```
+
+```{r make demographics tables}
+demTable <- demographicData %>% 
+    count(sex, ageGroup3) %>% 
+    tidyr::spread(key = sex, value=n) %>% 
+    mutate(NB = replace_na(NB, 0),
+           Total= F+M +NB)
+pander(demTable)
+
+demTable2 <- demographicData %>% 
+    count(sex, ageGroup4) %>% 
+    tidyr::spread(key = sex, value=n) %>% 
+    mutate(NB = replace_na(NB, 0),
+           Total= F+M +NB)
+pander(demTable2)
+```
+
+```{r demographic stats}
+ageStats <- demographicData %>% 
+    group_by(ageGroup3) %>% 
+    summarize(
+        min_age = min(age),
+        max_age = max(age),
+        mean_age = mean(age),
+        sd_age = sd(age))
+pander(ageStats)
+
+ageStats2 <- demographicData %>% 
+    group_by(ageGroup4) %>% 
+    summarize(
+        min_age = min(age),
+        max_age = max(age),
+        mean_age = mean(age),
+        sd_age = sd(age))
+pander(ageStats2)
+```
+
+## Relation between age and IQ
+```{r model age IQ correlation}
+demographicData$ageScaled <- scale_this(demographicData$age)
+demographicData$IQScaled <- scale_this(demographicData$IQ)
+
+age.IQ.lm <- lm(IQScaled ~ ageScaled, data = demographicData)
+pander(age.IQ.lm)
+```
+
+```{r plot age and IQ}
+age_IQ_plot <- ggplot(demographicData, aes(x = age, y = IQ)) +
+    geom_point(color = color1) +
+    geom_smooth(method = "lm", color = color2, fill = color2) +
+    xlab("Age") +
+    ylab("WASI Score (Full-Scale IQ)") +
+    explo.theme
+age_IQ_plot
+```
+
+### IQ scores across age groups
+```{r mean IQ by age group}
+meanIQ <- demographicData %>%
+    group_by(ageGroup3) %>%
+    summarize(N = n(),
+              meanMR = mean(WASI_mrT, na.rm = T),
+              meanVerbal= mean(WASI_verbalT, na.rm = T),
+              meanIQ = mean(IQ, na.rm = T),
+              sdIQ = sd(IQ, na.rm = T))
+pander(meanIQ)
+
+meanIQ2 <- demographicData %>%
+    group_by(ageGroup4) %>%
+    summarize(N = n(), 
+              meanMR = mean(WASI_mrT, na.rm = T),
+              meanVerbal= mean(WASI_verbalT, na.rm = T),
+              meanIQ = mean(IQ, na.rm = T),
+              sdIQ = sd(IQ, na.rm = T))
+pander(meanIQ2)
+```
+
+
+# Task statistics
+```{r block information}
+#label blocks as hard or easy
+blockInfo <- read_csv(file.path(dataDir, "explo_block_difficulty.csv"))
+exploAll <- full_join(exploAll, blockInfo, by = c("subID", "blockID")) %>%
+    mutate(blockDifficulty = case_when(blockDifficulty == 0 ~ 'Easy',
+                                       blockDifficulty == 1 ~ 'Hard'))
+```
+
+## Average number of times each hiding spot was encountered
+```{r number of times each spot encountered}
+#First, label all the novel hiding spots in each block
+novelStim <- exploAll %>%
+    select(subID, blockID, trialID, trialStimID_1, trialStimID_2, exposureHistory_t_1, exposureHistory_t_2) %>%
+    pivot_longer(cols = c(trialStimID_1, trialStimID_2), names_to = "stimSide", names_prefix = "trialStimID_", values_to = "stim") %>%
+    pivot_longer(cols = c(exposureHistory_t_1, exposureHistory_t_2), names_to = "stimSide2", names_prefix = "exposureHistory_t_", values_to = "exposeHist") %>%
+    filter(stimSide == stimSide2) %>%
+    select(-stimSide2) %>%
+    filter(blockID > 1) %>%
+    filter(exposeHist == 0) %>%
+    select(subID, blockID, stim) %>%
+    mutate(novel = 1)
+    
+#Compute the mean exposure history for novel and non-novel options in each block
+exposeHist <- exploAll %>%
+    select(subID, blockID, trialID, trialStimID_1, trialStimID_2, exposureHistory_t_1, exposureHistory_t_2) %>%
+    pivot_longer(cols = c(trialStimID_1, trialStimID_2), names_to = "stimSide", names_prefix = "trialStimID_", values_to = "stim") %>%
+    pivot_longer(cols = c(exposureHistory_t_1, exposureHistory_t_2), names_to = "stimSide2", names_prefix = "exposureHistory_t_", values_to = "exposeHist") %>%
+    filter(stimSide == stimSide2) %>%
+    select(-stimSide2) %>%
+    filter(blockID > 1) 
+
+exposeHist <- full_join(exposeHist, novelStim, by = c("subID", "blockID", "stim")) %>%
+    group_by(trialID, novel) %>%
+    summarize(meanExposeHist = mean(exposeHist),
+              maxExposeHist = max(exposeHist),
+              minExposeHist = min(exposeHist))
+
+pander(exposeHist)
+```
+
+
+# Choice behavior
+## Model: relation between age, block difficulty, and reward earned
+```{r reward earned age model}
+
+#compute reward earned
+reward_earned <- exploAll %>%
+    group_by(subID, age, IQ, blockDifficulty) %>%
+    summarize(total_reward = sum(reward, na.rm = T))
+
+#scale age and reward
+reward_earned$ageScaled <- scale_this(reward_earned$age)
+reward_earned$rewardScaled <- scale_this(reward_earned$total_reward)
+
+#set sum contrasts
+options(contrasts = rep("contr.sum", 2))
+
+#run model
+reward.age.blockDiff.lm <- lm(rewardScaled ~ ageScaled * blockDifficulty, data = reward_earned)
+
+pander(summary(reward.age.blockDiff.lm))
+# main effect of age
+# no effect of block difficulty
+# no age x difficulty interaction effect
+```
+
+## Model: relation between age, block difficulty, IQ, and reward earned
+```{r reward earned age model with IQ}
+#filter IQ
+reward_earned_IQ <- reward_earned %>%
+    filter(IQ > 0)
+
+#scale variables
+reward_earned_IQ$ageScaled <- scale_this(reward_earned_IQ$age)
+reward_earned_IQ$reward_scaled <- scale_this(reward_earned_IQ$total_reward)
+reward_earned_IQ$IQScaled <- scale_this(reward_earned_IQ$IQ)
+
+reward.age.IQ.lm <- lm(reward_scaled ~ ageScaled * IQScaled * blockDifficulty, data = reward_earned_IQ) 
+
+#show results
+pander(reward.age.IQ.lm)
+# main effect of age
+# main effect of IQ
+# no other sig. effects / interactions
+```
+
+## Plot: Reward earned by age
+```{r reward earned}
+reward_earned_total <- reward_earned %>% 
+    group_by(subID, age, blockDifficulty) %>%
+    summarize(total_reward = sum(total_reward))
+
+#plot
+reward_age_plot <- ggplot(reward_earned_total, aes(x = age, y = total_reward, color = blockDifficulty, fill = blockDifficulty)) +
+    geom_point() +
+    geom_smooth(method = "lm") + 
+    scale_color_manual(values = c(color1, color2), name = "Block Difficulty", labels = c("Easy", "Hard")) +
+    scale_fill_manual(values = c(color1, color2), name = "Block Difficulty", labels = c("Easy", "Hard")) +
+    xlab("Age") +
+    ylab("Total Reward Earned") +
+    geom_hline(yintercept = 37.5, linetype = "dashed") +
+    explo.theme
+reward_age_plot  
+```
+
+## Distribution of choices by age group
+```{r reward distributions}
+#add the high, med, low stim reward numbers to the data frame
+reward_dist <- exploAll %>%
+    select(subID, blockID, reward_probs_1:reward_probs_12) %>%
+    unique() %>%
+    pivot_longer(cols = c(reward_probs_1:reward_probs_12), 
+                 names_to = "stimNum", 
+                 values_to = "winProb",
+                 names_prefix = "reward_probs_") %>%
+    group_by(subID, blockID) %>%
+    filter(winProb > 0) %>%
+    mutate(stimRanking = 4-rank(winProb)) 
+
+high_rew_stim <- reward_dist %>%
+    filter(stimRanking == 1) %>%
+    mutate(highRewStimNum = stimNum,
+           highRewWinProb = winProb) %>%
+    select(-c(stimNum, winProb, stimRanking))
+
+med_rew_stim <- reward_dist %>%
+    filter(stimRanking == 2) %>%
+    mutate(medRewStimNum = stimNum,
+           medRewWinProb = winProb) %>%
+    select(-c(stimNum, winProb, stimRanking))
+
+low_rew_stim <- reward_dist %>%
+    filter(stimRanking == 3) %>%
+    mutate(lowRewStimNum = stimNum,
+           lowRewWinProb = winProb) %>%
+    select(-c(stimNum, winProb, stimRanking))
+
+stimRewardInfo <- high_rew_stim %>%
+    full_join(med_rew_stim, by = c("subID", "blockID")) %>%
+    full_join(low_rew_stim, by = c("subID", "blockID"))
+```
+
+```{r determine selected stim}
+processedData <- exploAll %>%
+    select(subID, blockID, trialID, selectedStimID, rejectedStimID, RT, reward, numBlockStims) %>%
+    mutate(selectedStimID = as.numeric(selectedStimID),
+           rejectedStimID = as.numeric(rejectedStimID))
+
+processedData <- processedData %>%
+    full_join(stimRewardInfo, by = c("subID", "blockID")) %>%
+    full_join(novelStim, by = c("subID", "blockID")) %>%
+    rename(novelStimNum = stim) %>%
+    select(-novel)
+```
+
+## Plot: Choice type by age group
+```{r choice type data processing}
+choice_type <- processedData %>%
+    mutate(reward_chosen = case_when(selectedStimID == highRewStimNum ~ "high",
+                                     selectedStimID == medRewStimNum ~ "med",
+                                     selectedStimID == lowRewStimNum ~ "low"),
+           reward_rejected =  case_when(rejectedStimID == highRewStimNum ~ "high",
+                                     rejectedStimID == medRewStimNum ~ "med",
+                                     rejectedStimID == lowRewStimNum ~ "low"),
+           novel_chosen = case_when(selectedStimID == novelStimNum ~ 1,
+                                     selectedStimID != novelStimNum ~ 0))
+
+# get sub demographic info
+ageData <- demographicData %>%
+    select(subID, age, ageGroup3, ageGroup4, IQ)
+
+#add age group
+choice_type <- full_join(choice_type, ageData, by = c("subID"))
+choice_type$reward_chosen <- factor(choice_type$reward_chosen, levels = c("low", "med", "high"))
+
+#compute counts
+rewardSubCounts <- choice_type %>%
+    group_by(subID, age, ageGroup3, reward_chosen) %>%
+    drop_na() %>%
+    summarize(N = n()) %>%
+    ungroup() %>%
+    group_by(subID) %>%
+    mutate(prop = N / sum(N))
+
+rewardCounts <- rewardSubCounts %>%
+    group_by(ageGroup3, reward_chosen) %>%
+    summarize(meanProp = mean(prop, na.rm = T),
+              seProp = se(prop))
+
+#plot
+choiceCountsPlot <- ggplot(rewardCounts, aes(x = reward_chosen, fill = ageGroup3, y = meanProp)) +
+    geom_bar(stat = "identity", position = "dodge", color = "black") +
+    geom_errorbar(width = .1, position = position_dodge(width = .9), aes(ymin = meanProp - seProp, ymax = meanProp + seProp)) +
+    scale_fill_manual(values = c(color1, color2, color3, color4), name = "Age Group") +
+    scale_x_discrete(labels = c("Low", "Medium", "High")) +
+    xlab("Value of Selected Option") +
+    ylab("Proportion of Choices") +
+    theme_classic()
+choiceCountsPlot
+```
+
+## Model: Optimal choices by age and block difficulty
+```{r optimal choices by age and block difficulty}
+#determine whether the participant made the optimal choice on each trial
+opt_choices <- choice_type %>%
+    mutate(opt_choice = case_when(reward_chosen == "high" ~ 1,
+                     reward_chosen == "med" & reward_rejected == "low" ~ 1,
+                     reward_chosen == "med" & reward_rejected == "high" ~ 0,
+                     reward_chosen == "low" ~ 0)) %>%
+    full_join(blockInfo, by = c("subID", "blockID")) %>%
+    mutate(blockDifficulty = factor(blockDifficulty)) %>%
+    drop_na()
+
+
+#scale variables
+opt_choices$ageScaled <- scale_this(opt_choices$age)
+opt_choices$trialScaled <- scale_this(opt_choices$trialID)
+
+optChoice.age.model <- mixed(opt_choice ~ ageScaled * blockDifficulty * trialScaled + 
+                                 (blockDifficulty + trialScaled | subID), 
+                             data = opt_choices,
+                             family = "binomial",
+                             method = "LRT",
+                             control = glmerControl(optimizer = "bobyqa"),
+                             expand_re = T)
+                            
+
+#show results
+optChoice.age.model
+
+#Note: singular fit w/ interaction in RE
+
+#main effect of age
+#main effect of block difficulty
+#main effect of trial 
+```
+
+## Model: Optimal choices by age, IQ and block difficulty
+```{r optimal choices by age, IQ, and block difficulty}
+#remove participants w/o IQ scores
+opt_choices_IQ <- opt_choices %>%
+    filter(IQ > 0)
+
+#rescale variables
+opt_choices_IQ$trialScaled <- scale_this(opt_choices_IQ$trialID)
+opt_choices_IQ$ageScaled <- scale_this(opt_choices_IQ$age)
+opt_choices_IQ$IQScaled <- scale_this(opt_choices_IQ$IQ)
+
+optChoice.age.IQ.model <- mixed(opt_choice ~ ageScaled * blockDifficulty * trialScaled * IQScaled + 
+                                 (blockDifficulty + trialScaled | subID), 
+                             data = opt_choices_IQ,
+                             family = "binomial",
+                             method = "LRT",
+                             control = glmerControl(optimizer = "bobyqa"),
+                             expand_re = T)
+                            
+
+#show results
+optChoice.age.IQ.model
+
+# main effect of age
+# main effect of IQ
+# main effect of block difficulty
+```
+
+## Plot: Optimal choices by age and block difficulty
+```{r opt choice age plot}
+mean_opt_choice <- opt_choices %>%
+    group_by(subID, age, blockDifficulty) %>%
+    summarize(meanOptChoice = mean(opt_choice, na.rm = T))
+
+opt_choice_plot <- ggplot(mean_opt_choice, aes(x = age, y = meanOptChoice, color = blockDifficulty, fill = blockDifficulty)) +
+    geom_point() +
+    geom_smooth(method = "lm") + 
+    scale_color_manual(values = c(color1, color2), name = "Block Difficulty", labels = c("Easy", "Hard")) +
+    scale_fill_manual(values = c(color1, color2), name = "Block Difficulty", labels = c("Easy", "Hard")) +
+    xlab("Age") +
+    ylab("Proportion of Optimal Choices") +
+    geom_hline(yintercept = .5, linetype = "dashed") +
+    explo.theme
+opt_choice_plot
+```
+
+## Model: RTs by age
+```{r RT age model}
+exploAll$ageScaled <- scale_this(exploAll$age)
+
+RT.age.lm <- lm(RT ~ ageScaled, data = exploAll) 
+
+pander(RT.age.lm)
+#main effect of age
+```
+
+```{r RT age IQ model}
+exploAll_IQ <- exploAll %>%
+    filter(IQ > 0)
+
+exploAll_IQ$ageScaled <- scale_this(exploAll_IQ$age)
+exploAll_IQ$IQScaled <- scale_this(exploAll_IQ$IQ)
+
+RT.age.IQ.lm <- lm(RT ~ ageScaled * IQScaled, data = exploAll_IQ) 
+
+pander(RT.age.IQ.lm)
+# main effect of age
+# main effect of IQ
+# age x IQ interaction
+```
+
+## Plot: Mean RT by age
+```{r RTs}
+mean_RTs <- exploAll %>%
+    group_by(subID, age) %>%
+    summarize(mean_RT = mean(RT, na.rm = T))
+
+#plot
+RT_age_plot <- ggplot(mean_RTs, aes(x = age, y = mean_RT)) +
+    geom_point(color = color1) +
+    geom_smooth(method = "lm", color = color2, fill = color2) +
+    xlab("Age") +
+    ylab("Mean Reaction Time (seconds)") +
+    explo.theme
+RT_age_plot  
+```
+
+
+
+# Influence of choice features across age
+For the regression analyses, we first compute three learning features for each of the two options presented: expected value, uncertainty, and novelty. The participant's belief about the probability of winning for each option can be described with a beta distribution, where the alpha parameter indicates the number of wins and the beta parameter indicates the number of losses. Because neither of the parameters of the distribution can be zero, we add 1 to the number of previous wins and losses prior to computing any of the learning features.
+
+The expected value for each option is defined as the mean of the beta distribution:
+$$\frac{\alpha}{\alpha + \beta}$$
+
+The uncertainty over each option is defined as the variance of the beta distribution:
+$$\frac{\alpha * \beta}{(\alpha * \beta)^2 + (\alpha + \beta + 1)}$$
+
+The novelty of each option is determined by taking the variance of a different beta distribution, where the alpha parameter reflects the exposure history (number of trials on which option was presented) and the beta parameter is 1. As alpha increases, the variance will decrease. 
+
+In the regression models, we include the *difference* in these feature values between the left and right option, and determine how they influence the participant's probability of selecting the left option. In the models, higher features values indicate that relative to the right option, the left option is:
+- more valuable
+- more uncertain
+- more novel
+
+```{r compute learning features}
+#Note: 
+# Variables post-ended with _1 = left option
+# Variables post-ended with _2 = right option
+
+#compute value, uncertainty, and novelty for each trial
+data.all <- exploAll
+data.all$subID = as.factor(data.all$subID)
+
+# compute expected value and variance of the LEFT option 
+betaA = data.all$winHistory_b_1+1 
+betaB = data.all$lossHistory_b_1+1
+data.all$ev_1 = betaA / (betaA + betaB) #number of wins / number of wins + number of losses
+data.all$var_1 = (betaA*betaB)/((betaA+betaB)^2 * (betaA+betaB+1)) #variance
+ 
+# compute expected value of the RIGHT option according to a beta distribution
+betaA = data.all$winHistory_b_2+1
+betaB = data.all$lossHistory_b_2+1
+data.all$ev_2 = betaA / (betaA + betaB)
+data.all$var_2 = (betaA*betaB)/((betaA+betaB)^2 * (betaA+betaB+1))
+  
+# feed exposure in as alpha in a beta distribution to compute novelty on the same scale as uncertainty
+betaA = data.all$exposureHistory_t_1+1
+betaB = 1
+data.all$novel_1 = (betaA*betaB)/( (betaA+betaB)^2 * (betaA+betaB+1)) #get variance in exposure
+  
+# for the RIGHT option
+betaA = data.all$exposureHistory_t_2+1
+betaB = 1
+data.all$novel_2 = (betaA*betaB)/((betaA+betaB)^2 * (betaA+betaB+1)) #with repeated exposure, variance of beta distribution will decrease
+```
+
+```{r select features for regression}
+# probe predictors of choice (left vs right)
+data.model <- data.all %>%
+    filter(!is.na(selectedStimID)) %>% #exclude trials where they did not make a choice
+    select(subID, 
+          trialID, 
+          numBlockStims, 
+          trialStimID_1, 
+          trialStimID_2, 
+          selectedStimID, 
+          ev_1, 
+          ev_2, 
+          var_1, 
+          var_2, 
+          novel_1, 
+          novel_2, 
+          age,
+          ageGroup3,
+          ageGroup4, 
+          IQ)
+    
+
+# compute difference in left - right option feature values 
+data.model$evDiff = data.model$ev_1 - data.model$ev_2
+data.model$varDiff = data.model$var_1 - data.model$var_2
+data.model$novelDiff = data.model$novel_1 - data.model$novel_2
+
+# compute difference in more uncertain vs. less uncertain expected values
+# compute difference in more novel vs. more familiar expected values
+data.model <- data.model %>%
+    mutate(evUncertainDiff = case_when(var_1 > var_2 ~ ev_1 - ev_2,
+                                       var_1 < var_2 ~ ev_2 - ev_1),
+           evNovelDiff = case_when(novel_1 > novel_2 ~ ev_1 - ev_2,
+                                   novel_1 < novel_2 ~ ev_2 - ev_1))
+
+# determine which option was selected
+data.model <- data.model %>%
+    mutate(leftChoice = case_when(selectedStimID == trialStimID_1 ~ 1,
+                                  selectedStimID == trialStimID_2 ~ 0),
+           uncertainChoice = case_when(var_1 > var_2 & leftChoice == 1 ~ 1,
+                                       var_1 > var_2 & leftChoice == 0 ~ 0,
+                                       var_1 < var_2 & leftChoice == 1 ~ 0,
+                                       var_1 < var_2 & leftChoice == 0 ~ 1),
+           novelChoice  = case_when(novel_1 > novel_2 & leftChoice == 1 ~ 1,
+                                       novel_1 > novel_2 & leftChoice == 0 ~ 0,
+                                       novel_1 < novel_2 & leftChoice == 1 ~ 0,
+                                       novel_1 < novel_2 & leftChoice == 0 ~ 1),
+           valuableChoice = case_when( ev_1 > ev_2 & leftChoice == 1 ~ 1,
+                                       ev_1 > ev_2 & leftChoice == 0 ~ 0,
+                                       ev_1 < ev_2 & leftChoice == 1 ~ 0,
+                                       ev_1 < ev_2 & leftChoice == 0 ~ 1))
+
+#scale feature values
+data.model$evDiffScaled = scale_this(data.model$evDiff)
+data.model$varDiffScaled = scale_this(data.model$varDiff)
+data.model$novelDiffScaled = scale_this(data.model$novelDiff)
+
+# scale number of stimuli, and trial number
+data.model$scaledNumBlockStims = scale_this(data.model$numBlockStims)
+data.model$scaledTrialNum = scale_this(data.model$trialID)
+data.model$ageScaled <- scale_this(data.model$age)
+```
+
+```{r compute value, uncertainty, and novelty means}
+value_means <- data.model %>%
+    mutate(evDiffGroup = cut(evDiff, breaks = c(-1, -.2, -.1, .1, .2, 1))) %>%
+    group_by(ageGroup3, evDiffGroup) %>%
+    summarize(meanChoice = mean(leftChoice),
+              seChoice = se(leftChoice)) %>%
+    drop_na() %>%
+    mutate(group = "Higher Value")
+
+value_means2 <- data.model %>%
+    mutate(evDiffGroup = cut(evDiff, breaks = c(-1, -.2, -.1, .1, .2, 1))) %>%
+    group_by(ageGroup4, evDiffGroup) %>%
+    summarize(meanChoice = mean(leftChoice),
+              seChoice = se(leftChoice)) %>%
+    drop_na() %>%
+    mutate(group = "Higher Value")
+
+uncertainty_means <- data.model %>%
+    mutate(evDiffGroup = cut(evUncertainDiff, breaks = c(-1, -.2, -.1, .1, .2, 1))) %>%
+    group_by(ageGroup3, evDiffGroup) %>%
+    summarize(meanChoice = mean(uncertainChoice, na.rm = T),
+              seChoice = se(uncertainChoice)) %>%
+    drop_na() %>%
+    mutate(group = "More Uncertain")
+
+uncertainty_means2 <- data.model %>%
+    mutate(evDiffGroup = cut(evUncertainDiff, breaks = c(-1, -.2, -.1, .1, .2, 1))) %>%
+    group_by(ageGroup4, evDiffGroup) %>%
+    summarize(meanChoice = mean(uncertainChoice, na.rm = T),
+              seChoice = se(uncertainChoice)) %>%
+    drop_na() %>%
+    mutate(group = "More Uncertain")
+
+novel_means <- data.model %>%
+    mutate(evDiffGroup = cut(evNovelDiff, breaks = c(-1, -.2, -.1, .1, .2, 1))) %>%
+    group_by(ageGroup3, evDiffGroup) %>%
+    summarize(meanChoice = mean(novelChoice, na.rm = T),
+              seChoice = se(novelChoice)) %>%
+    drop_na() %>%
+    mutate(group = "More Novel")
+
+novel_means2 <- data.model %>%
+    mutate(evDiffGroup = cut(evNovelDiff, breaks = c(-1, -.2, -.1, .1, .2, 1))) %>%
+    group_by(ageGroup4, evDiffGroup) %>%
+    summarize(meanChoice = mean(novelChoice, na.rm = T),
+              seChoice = se(novelChoice)) %>%
+    drop_na() %>%
+    mutate(group = "More Novel")
+```
+
+## Plot: Influence of learning features on choice behavior
+```{r plot novelty seeking and uncertainty aversion together}
+#combine means
+feature_means <- rbind(value_means, uncertainty_means, novel_means)
+
+feature_plot <- ggplot(feature_means, aes(x = evDiffGroup, y = meanChoice, color = ageGroup3)) +
+    facet_wrap(~group) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = meanChoice - seChoice, ymax = meanChoice + seChoice), width = 0) +
+    scale_color_manual(values = c(color1, color2, color3, color4), name = "Age Group") +
+    scale_shape_manual(values = c(1, 2, 3), name = " ") +
+    geom_hline(yintercept = .5, linetype = 'dashed') +
+    ylab("Proportion Chosen") +
+    xlab("Expected Value Difference") +
+    explo.theme + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = .5),
+          axis.line = element_blank(),
+          strip.background = element_rect(fill = NA, colour = "black", size = .5),
+          strip.text = element_text(face = "bold"),
+          axis.title.x = element_text(vjust=-0.5),
+          axis.text.x = element_text(size = 8)) 
+feature_plot
+```
+
+```{r feature plot with age groups as facets, fig.width=8, fig.height=4}
+feature_plot_ageFacets <- ggplot(feature_means, aes(x = evDiffGroup, y = meanChoice, color = group)) +
+    facet_wrap(~ageGroup3) +
+    geom_point(size = 2) +
+    geom_errorbar(aes(ymin = meanChoice - seChoice, ymax = meanChoice + seChoice), width = 0) +
+    scale_color_manual(values = c(color3, color1, color2), name = "",
+                       labels = c("Left vs. Right",
+                              "More vs. Less Novel",
+                                  "More vs. Less Uncertain")) +
+    geom_hline(yintercept = .5, linetype = 'dashed') +
+    ylab("Proportion Chosen") +
+    xlab("Expected Value Difference") +
+    geom_line(aes(group = group), size = .5, fill = "white") + 
+    explo.theme + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = .5),
+          axis.line = element_blank(),
+          strip.background = element_rect(fill = NA, colour = "black", size = .5),
+          strip.text = element_text(face = "bold"),
+          axis.title.x = element_text(vjust=-0.5),
+          axis.text.x = element_text(size = 8),
+          legend.position = "top") 
+feature_plot_ageFacets
+```
+
+
+## Plot: Choices on equal expected value trials
+```{r proportion of trials more certain and more novel chosen equal EV}
+uncertainty_novelty_age_group_means_equal_value <- data.model %>%
+    mutate(evDiffGroup = cut(evDiff, breaks = c(-.05, .05))) %>%
+    group_by(ageGroup3, evDiffGroup) %>%
+    summarize(meanUncertainChoice = mean(uncertainChoice, na.rm = T),
+              seUncertainChoice = se(uncertainChoice),
+              meanNovelChoice = mean(novelChoice, na.rm = T),
+              seNovelChoice = se(novelChoice)) %>%
+    drop_na()
+
+uncertainty_novelty_age_group_means_equal_value2 <- data.model %>%
+    mutate(evDiffGroup = cut(evDiff, breaks = c(-.05, .05))) %>%
+    group_by(ageGroup4, evDiffGroup) %>%
+    summarize(meanUncertainChoice = mean(uncertainChoice, na.rm = T),
+              seUncertainChoice = se(uncertainChoice),
+              meanNovelChoice = mean(novelChoice, na.rm = T),
+              seNovelChoice = se(novelChoice)) %>%
+    drop_na()
+
+```
+
+```{r proportion of trials more certain and more novel chosen equal EV continuous age, fig.height=4, fig.width=4}
+uncertainty_novelty_sub_means_equal_value <- data.model %>%
+    mutate(evDiffGroup = cut(evDiff, breaks = c(-.05, .05))) %>%
+    group_by(subID, age, evDiffGroup) %>%
+    summarize(meanUncertainChoice = mean(uncertainChoice, na.rm = T),
+              meanNovelChoice = mean(novelChoice, na.rm = T)) %>%
+    drop_na() %>% 
+    pivot_longer(cols = c(meanUncertainChoice, meanNovelChoice),
+                 names_to = "feature",
+                 values_to = "prop")
+
+ 
+ feature_cont_age_plot2 <- ggplot(uncertainty_novelty_sub_means_equal_value, 
+                                aes(x = age, y = prop, color = feature, fill = feature)) +
+    geom_point() +
+    geom_smooth(method = "lm") +
+    scale_color_manual(values = c(color2, color1), name = "", 
+                      labels = c("More Novel",
+                                 "More Uncertain")) +
+    scale_fill_manual(values = c(color2, color1), name = "", 
+                      labels = c("More Novel",
+                                 "More Uncertain")) +
+    ylab("Proportion Chosen") +
+    xlab("Age") +
+    explo.theme +
+    coord_cartesian(ylim = c(0, 1)) +
+    geom_hline(yintercept = .5, linetype = 'dashed') +
+    theme(legend.position = "top")
+ feature_cont_age_plot2  
+```
+
+```{r proportion of trials more certain and more novel chosen equal EV plot, fig.height=4, fig.width=4}
+uncertainty_novelty_indiv_means_equal_value <- data.model %>%
+    mutate(evDiffGroup = cut(evDiff, breaks = c(-.05, .05))) %>%
+    group_by(subID, age, ageGroup3, ageGroup4, evDiffGroup) %>%
+    summarize(more_uncertain_choice = mean(uncertainChoice, na.rm = T),
+              more_novel_choice = mean(novelChoice, na.rm = T)) %>%
+    drop_na() %>%
+    pivot_longer(cols = c(more_uncertain_choice, more_novel_choice), 
+                 names_to = "feature", 
+                 values_to = "meanChoice")
+
+equalEVplot <- ggplot(uncertainty_novelty_indiv_means_equal_value, aes(x = ageGroup3, y = meanChoice, color = feature, fill = feature)) +
+    geom_point(position=position_jitterdodge(), aes(color = feature)) +
+    geom_boxplot(color = "black", alpha = .3, outlier.color = NA) +
+    scale_color_manual(values = c(color1, color2), name = "", 
+                      labels = c("More Novel",
+                                 "More Uncertain")) +
+    scale_fill_manual(values = c(color1, color2), name = "", 
+                      labels = c("More Novel",
+                                 "More Uncertain")) +
+    geom_hline(yintercept = .5, linetype = 'dashed') +
+    explo.theme + 
+    ylab("Proportion Chosen") +
+    xlab("Age Group") +
+    theme(legend.position = "top")
+equalEVplot
+```
+
+
+## Model: Influence of age, value, uncertainty, and novelty on choice
+```{r choice features model: age}
+feature.age.model <- mixed(leftChoice ~ 
+                               evDiffScaled + 
+                               varDiffScaled + 
+                               novelDiffScaled +
+                               evDiffScaled:ageScaled +
+                               varDiffScaled:ageScaled + 
+                               novelDiffScaled:ageScaled +
+                               (evDiffScaled + varDiffScaled + novelDiffScaled | subID),
+                   data.model, 
+                   family = binomial, 
+                   method = "LRT",
+                   control = glmerControl(optimizer = "bobyqa"),
+                   expand_re = T)
+feature.age.model 
+```
+
+```{r plot model effects: age}
+plot_model(feature.age.model,
+           type = "est",
+           show.values = TRUE,
+           show.p = TRUE,
+           colors = c(color1, color2)) +
+     scale_x_discrete(labels =  c(
+         "Age x Novelty",
+         "Age x Uncertainty",
+         "Age x Expected Value",
+         "Novelty", 
+         "Uncertainty", 
+         "Expected Value")) + 
+    ggtitle("Predictors of choice") +
+    geom_hline(yintercept = 0, color = "grey", linetype = "dashed") +
+    explo.theme
+```
+
+## Model: Influence of age, IQ, value, uncertainty, and novelty on choice
+```{r choice features model: age and IQ}
+
+#filter out participants w/o IQ scores (n = 2)
+data.model.IQ <- data.model %>%
+    filter(IQ > 0)
+
+#scale continuous variables
+data.model.IQ$evDiffScaled <- scale_this(data.model.IQ$evDiff)
+data.model.IQ$varDiffScaled <- scale_this(data.model.IQ$varDiff)
+data.model.IQ$novelDiffScaled <- scale_this(data.model.IQ$novelDiff)
+data.model.IQ$ageScaled <- scale_this(data.model.IQ$age)
+data.model.IQ$IQScaled <- scale_this(data.model.IQ$IQ)
+
+feature.age.IQ.model <- mixed(leftChoice ~ 
+                               evDiffScaled + 
+                               varDiffScaled + 
+                               novelDiffScaled +
+                               evDiffScaled:ageScaled +
+                               varDiffScaled:ageScaled + 
+                               novelDiffScaled:ageScaled +
+                               evDiffScaled:IQScaled +
+                               varDiffScaled:IQScaled + 
+                               novelDiffScaled:IQScaled +
+                               evDiffScaled:ageScaled:IQScaled +
+                               varDiffScaled:ageScaled:IQScaled + 
+                               novelDiffScaled:ageScaled:IQScaled +
+                               (evDiffScaled + varDiffScaled + novelDiffScaled | subID),
+                   data.model.IQ, 
+                   family = binomial, 
+                   method = "LRT",
+                   control = glmerControl(optimizer = "bobyqa"),
+                   expand_re = T)
+feature.age.IQ.model
+```
+
+```{r plot model effects: age and IQ}
+plot_model(feature.age.IQ.model,
+           type = "est",
+           show.values = TRUE,
+           show.p = TRUE,
+           colors = c(color1, color2)) +
+     scale_x_discrete(labels =  c(
+         "Age x IQ x Novelty",
+         "Age x IQ x Uncertainty",
+         "Age x IQ x Expected Value",
+         "IQ x Novelty",
+         "IQ x Uncertainty",
+         "IQ x Expected Value",
+         "Age x Novelty",
+         "Age x Uncertainty",
+         "Age x Expected Value",
+         "Novelty", 
+         "Uncertainty", 
+         "Expected Value")) + 
+    ggtitle("Predictors of choice") +
+    geom_hline(yintercept = 0, color = "grey", linetype = "dashed") +
+    explo.theme
+```
+
+
+## Model: Influence of age, trial, value, uncertainty, and novelty on choice
+```{r choice features model: age and within-block trial}
+feature.age.trial.model = mixed(leftChoice ~ 
+                                    evDiffScaled + 
+                                    varDiffScaled + 
+                                    novelDiffScaled +
+                                    evDiffScaled:scaledTrialNum +
+                                    varDiffScaled:scaledTrialNum + 
+                                    novelDiffScaled:scaledTrialNum +
+                                    evDiffScaled:ageScaled +
+                                    varDiffScaled:ageScaled + 
+                                    novelDiffScaled:ageScaled +
+                                    evDiffScaled:scaledTrialNum:ageScaled +
+                                    varDiffScaled:scaledTrialNum:ageScaled  + 
+                                    novelDiffScaled:scaledTrialNum:ageScaled +
+                                    (evDiffScaled + 
+                                         varDiffScaled + 
+                                         novelDiffScaled | subID),
+                   data.model, 
+                   family = binomial, 
+                   method = "LRT",
+                   control = glmerControl(optimizer = "bobyqa"),
+                   expand_re = T)
+feature.age.trial.model
+```
+
+```{r plot model effects: age and trial}
+plot_model(feature.age.trial.model,
+           type = c("est"),
+           show.values = TRUE,
+           show.p = TRUE,
+           colors = c(color1, color2)) +
+     scale_x_discrete(labels =  c(
+         "Age x Novelty x Horizon",
+         "Age x Uncertainty x Horizon",
+         "Age x Expected Value x Horizon",
+         "Age x Novelty",
+         "Age x Uncertainty",
+         "Age x Expected Value",
+         "Novelty x Horizon",
+         "Uncertainty x Horizon",
+         "Expected Value x Horizon",
+         "Novelty", 
+         "Uncertainty", 
+         "Expected Value")) + 
+    ggtitle("Predictors of choice") +
+    geom_hline(yintercept = 0, color = "grey", linetype = "dashed") +
+    explo.theme
+```
+
+## Plot: Feature influence across trials
+```{r plot horizon effects across features, fig.width=8, fig.height=5}
+
+#compute mean choice on every trial
+horizon_data <- data.model %>%
+    select(ageGroup3, trialID, valuableChoice, uncertainChoice, novelChoice) %>%
+    pivot_longer(cols = c(valuableChoice, uncertainChoice, novelChoice), 
+                 names_to = "feature",
+                 values_to = "choice") %>%
+    group_by(ageGroup3, trialID, feature) %>%
+    summarize(meanChoice = mean(choice, na.rm = T),
+              seChoice = se(choice))
+
+#compute rolling means for value, uncertainty, novelty
+rolling_mean_choice_ev <- horizon_data %>%
+    filter(feature == "valuableChoice") %>%
+    group_by(ageGroup3) %>%
+    summarize(rollingMeanChoice = rollmean(meanChoice, k = 3)) %>%
+    mutate(feature = "valuableChoice",
+                      bin = 1:n())
+
+rolling_mean_choice_u <- horizon_data %>%
+    filter(feature == "uncertainChoice") %>%
+    group_by(ageGroup3) %>%
+    summarize(rollingMeanChoice = rollmean(meanChoice, k = 3)) %>%
+    mutate(feature = "uncertainChoice",
+                      bin = 1:n())
+
+rolling_mean_choice_n <- horizon_data %>%
+    filter(feature == "novelChoice") %>%
+    group_by(ageGroup3) %>%
+    summarize(rollingMeanChoice = rollmean(meanChoice, k = 3)) %>%
+    mutate(feature = "novelChoice",
+           bin = 1:n())
+
+rolling_mean_choices <- rbind(rolling_mean_choice_ev, rolling_mean_choice_u, rolling_mean_choice_n) 
+
+horizon_plot <- ggplot(rolling_mean_choices, aes(x = bin, y = rollingMeanChoice, color = feature)) +
+    facet_wrap(~ageGroup3) +
+    geom_point() +
+    geom_line() + 
+    scale_color_manual(values = c(color1, color2, color3), 
+                       name = "Feature",
+                       labels = c("Novelty",
+                                  "Uncertainty",
+                                 "Expected Value")) +
+    xlab("3-Trial Bin") +
+    ylab("Proportion Chosen") +
+    explo.theme
+horizon_plot
+```
+
+
+
+## Model: Influence of age, quadratic age, value, uncertainty, and novelty on choice
+```{r choice features model: age and quadratic age}
+#add quadratic age
+data.model$ageSquaredScaled <- scale_this(data.model$age^2)
+
+feature.quad_age.model <- mixed(leftChoice ~ 
+                               evDiffScaled + 
+                               varDiffScaled + 
+                               novelDiffScaled +
+                               evDiffScaled:ageScaled +
+                               varDiffScaled:ageScaled + 
+                               novelDiffScaled:ageScaled +
+                               evDiffScaled:ageSquaredScaled +
+                               varDiffScaled:ageSquaredScaled + 
+                               novelDiffScaled:ageSquaredScaled +
+                               (evDiffScaled + varDiffScaled + novelDiffScaled | subID),
+                   data.model, 
+                   family = binomial, 
+                   method = "LRT",
+                   control = glmerControl(optimizer = "bobyqa"),
+                   expand_re = T)
+feature.quad_age.model 
+```
+
+```{r plot model effects: age and quadratic age}
+plot_model(feature.quad_age.model,
+           type = "est",
+           show.values = TRUE,
+           show.p = TRUE,
+           colors = c(color1, color2)) +
+     scale_x_discrete(labels =  c(
+         "Quadratic Age x Novelty",
+         "Quadratic Age x Uncertainty",
+         "Quadratic Age x Expected Value",
+         "Age x Novelty",
+         "Age x Uncertainty",
+         "Age x Expected Value",
+         "Novelty", 
+         "Uncertainty", 
+         "Expected Value")) + 
+    ggtitle("Predictors of choice") +
+    geom_hline(yintercept = 0, color = "grey", linetype = "dashed") +
+    explo.theme
+```
+
+
+## Model: Influence of age, quadratic age, IQ, value, uncertainty, and novelty on choice
+```{r choice features model: age, quadratic age, and IQ}
+data.model.IQ$ageSquaredScaled  <- scale_this((data.model.IQ$age)^2)
+
+feature.quad_age.IQ.model = mixed(leftChoice ~ 
+                                    evDiffScaled + 
+                                    varDiffScaled + 
+                                    novelDiffScaled +
+                                    evDiffScaled:ageScaled +
+                                    evDiffScaled:IQScaled +
+                                    evDiffScaled:IQScaled:ageScaled +
+                                    evDiffScaled:IQScaled:ageSquaredScaled +
+                                    varDiffScaled:ageScaled + 
+                                    varDiffScaled:ageSquaredScaled + 
+                                    varDiffScaled:IQScaled +
+                                    varDiffScaled:IQScaled:ageScaled +
+                                    varDiffScaled:IQScaled:ageSquaredScaled +
+                                    novelDiffScaled:ageScaled +
+                                    novelDiffScaled:IQScaled +
+                                    novelDiffScaled:IQScaled:ageScaled +
+                                    novelDiffScaled:IQScaled:ageSquaredScaled +
+                                ((evDiffScaled + varDiffScaled + novelDiffScaled) | subID),
+                   data.model.IQ, 
+                   family = binomial, 
+                   method = "LRT",
+                   control = glmerControl(optimizer = "bobyqa"),
+                   expand_re = T)
+
+feature.quad_age.IQ.model
+
+# main effects of EV, uncertainty, novelty
+# EV x age
+# EV x IQ
+# marginal uncertainty x age 
+# novelty x IQ
+# novelty x age x IQ
+# novelty x age x quadratic age
+```
+
+
+# Memory Test
+```{r process memory data}
+#import mem Data
+memData <- read_csv(file.path(dataDir, "explo_mem_data.csv"))
+
+# get sub ages
+ageData <- demographicData %>%
+    select(subID, age, ageGroup3, ageGroup4, IQ)
+
+#combine with demographic data
+memData <- inner_join(memData, ageData, by = c("subID"))
+
+#determine response made and compute accuracy
+memData <- memData %>%
+    mutate(resp = case_when(respKey == 1 ~ imageOrder_1,
+                            respKey == 2 ~ imageOrder_2,
+                            respKey == 3 ~ imageOrder_3, 
+                            respKey == 4 ~ imageOrder_4, 
+                            respKey == 5 ~ imageOrder_5),
+           mem_resp = case_when(resp == 1 ~ "High",
+                                resp == 2 ~ "Low",
+                                resp == 3 ~ "Med",
+                                resp == 4 ~ "High_Diff",
+                                resp == 5 ~ "Foil"),
+           mem_acc = case_when(resp == 1 ~ 1,
+                               resp != 1 ~ 0))
+
+memData$mem_resp <- factor(memData$mem_resp, levels = c("High", "Med", "Low", "High_Diff", "Foil"))
+
+```
+
+## Model: Memory accuracy vs. chance performance
+```{r memory accuracy vs chance}
+sub_mem_acc <- memData %>%
+    group_by(subID) %>%
+    summarize(mean_mem_acc = mean(mem_acc, na.rm = T))
+
+mem_acc.ttest <- t.test(sub_mem_acc$mean_mem_acc, mu = .2)
+mem_acc.ttest
+
+group_mem_acc <- sub_mem_acc %>%
+    summarize(group_mean_mem_acc = mean(mean_mem_acc),
+              mem_se = se(mean_mem_acc))
+group_mem_acc
+```
+
+## Model: Memory accuracy by age 
+```{r memory accuracy by age model}
+memData$ageScaled <- scale_this(memData$age)
+
+mem.age.model <- glm(mem_acc ~ ageScaled, family = "binomial", data = memData)
+pander(summary(mem.age.model))
+
+#no effect of age on memory accuracy
+```
+
+
+## Plot: Memory accuracy by age
+```{r mean memory accuracy by age}
+meanMemData <- memData %>%
+    group_by(subID, age) %>%
+    summarize(meanMemAcc = mean(mem_acc, na.rm = T))
+
+meanMemPlot <- ggplot(meanMemData, aes(x = age, y = meanMemAcc)) +
+    geom_point(color = color1) + 
+    geom_smooth(method = "lm", color = color2, fill = color2) +
+    ylab("Mean Memory Accuracy") +
+    xlab("Age") +
+    explo.theme
+meanMemPlot
+```
+
+## Stats: Mean memory accuracy by age group
+```{r mean memory accuracy by age group}
+meanMemData <- memData %>%
+    group_by(ageGroup3) %>%
+    summarize(meanMemAcc = mean(mem_acc, na.rm = T))
+```
+
+## Plot: Distribution of memory responses
+```{r mem plot response distribution}
+
+#compute each subject's distribution of responses
+memRespSubCounts <- memData %>%
+    group_by(subID, age, ageGroup3, mem_resp) %>%
+    drop_na() %>%
+    summarize(N = n()) %>%
+    ungroup() %>%
+    group_by(subID) %>%
+    mutate(prop = N / sum(N))
+
+memRespCounts <- memRespSubCounts %>%
+    group_by(ageGroup3, mem_resp) %>%
+    summarize(meanProp = mean(prop, na.rm = T),
+              seProp = se(prop))
+
+#plot
+memRespPlot <- ggplot(memRespCounts, aes(x = mem_resp, fill = ageGroup3, y = meanProp)) +
+    geom_bar(stat = "identity", position = "dodge", color = "black") +
+    geom_errorbar(aes(ymin = meanProp - seProp, ymax = meanProp + seProp), width = .1, position = position_dodge(width = .9)) +
+    #facet_wrap(~ageGroup) +
+    scale_fill_manual(values = c(color1, color2, color3), name = "Age Group") + 
+    xlab("Response") +
+    ylab("Proportion of Responses") +
+    scale_x_discrete(labels = c("High Reward", "Med Reward", "Low Reward", "High Different", "New")) +
+    geom_hline(yintercept = .2, linetype = "dashed") +
+    explo.theme +
+    theme(legend.position = "top", 
+          axis.text.x = element_text(angle = 75, vjust = .5))
+memRespPlot
+```
+
+
+# Model comparison
+```{r pxps}
+pxps <- read_csv(file.path(dataDir, "model_output/pxps.csv"), col_names = F) %>%
+    rownames_to_column() %>%
+    mutate(ageGroup = case_when(rowname == 1 ~ "Children",
+                                rowname == 2 ~ "Adolescents",
+                                rowname == 3 ~ "Adults")) %>%
+    select(-rowname) %>%
+    pivot_longer(cols = X1:X6,
+                 values_to = "value",
+                 names_to = "model")%>%
+    mutate(value_type = "Protected Exceedance Probability")
+
+freq <-read_csv(file.path(dataDir, "model_output/model_freq.csv"), col_names = F) %>%
+    rownames_to_column() %>%
+    mutate(ageGroup = case_when(rowname == 1 ~ "Children",
+                                rowname == 2 ~ "Adolescents",
+                                rowname == 3 ~ "Adults")) %>%
+    select(-rowname) %>%
+    pivot_longer(cols = X1:X6,
+                 values_to = "value",
+                 names_to = "model")%>%
+    mutate(value_type = "Model Frequency")
+
+model_stats <- rbind(pxps, freq) %>%
+    filter(model %in% c("X2", "X3", "X5"))
+
+model_stats$ageGroup <- factor(model_stats$ageGroup, levels = c("Children", "Adolescents", "Adults"))
+```
+
+```{r plot model stats}
+
+model_stats_plot <- ggplot(model_stats, aes(x = ageGroup, fill = model, y = value)) +
+    facet_wrap(~value_type, ncol = 1) +
+    geom_bar(stat = "identity", position = "dodge", color = "black") + 
+    scale_fill_manual(values = c(color1, color2, color3),
+                      name = "Model",
+                      labels = c("Novelty bias",
+                                 "Novelty + uncertainty bias",
+                                 "Familiarity-gated uncertainty")) +
+    xlab("Age Group") +
+    ylab("Value") +
+    explo.theme
+model_stats_plot
+```

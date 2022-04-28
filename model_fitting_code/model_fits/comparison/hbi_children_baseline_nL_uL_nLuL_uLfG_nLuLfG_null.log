@@ -1,0 +1,46 @@
+cbm_hbi_hbi                                       24-Dec-2021 10:22:52
+Running hierarchical bayesian inference (HBI)- null mode...
+
+HBI has been initialized according to
+	model_fits/aggregated/children_smB_rlP.mat [for model 1]
+	model_fits/aggregated/children_smB_rlP_nL.mat [for model 2]
+	model_fits/aggregated/children_smB_rlP_uL.mat [for model 3]
+	model_fits/aggregated/children_smB_rlP_nL_uL.mat [for model 4]
+	model_fits/aggregated/children_smB_rlP_uL_fG.mat [for model 5]
+	model_fits/aggregated/children_smB_rlP_nL_uL_fG.mat [for model 6]
+ 
+Number of samples: 30
+Number of models: 6
+======================================================================
+Iteration 01
+Iteration 02
+                                                           dL:   28.50
+                                                           dx:    0.22
+Iteration 03
+                                                           dL:    4.23
+                                                           dx:    0.08
+Iteration 04
+                                                           dL:    2.53
+                                                           dx:    0.05
+Iteration 05
+                                                           dL:    0.65
+                                                           dx:    0.05
+Iteration 06
+                                                           dL:    0.69
+                                                           dx:    0.03
+Iteration 07
+                                                           dL:    0.50
+                                                           dx:    0.03
+Iteration 08
+                                                           dL:    0.33
+                                                           dx:    0.02
+Iteration 09
+                                                           dL:    0.22
+                                                           dx:    0.02
+Iteration 10
+                                                           dL:    0.15
+                                                           dx:    0.01
+Iteration 11
+                                                           dL:    0.29
+                                                           dx:    0.01
+                                                          Converged :]
