@@ -5,8 +5,11 @@
 .Rproj
 .Rproj.user/
 
-# Ignore recoverability folder for now
+# Ignore recoverability folder 
 simulation_and_recovery_code/
 
-# Ignore recoverability analyses for now
+# Ignore recoverability analyses 
 analysis_code/explo_recoverability.Rmd
+
+# Ignore simulated data (too large)
+data/model_output/*sim*.csv
